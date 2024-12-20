@@ -4,26 +4,25 @@
 #include <bb_captouch.h>
 #include "BLECont.h"
 
-LV_FONT_DECLARE(symbols)
-
+// Graphics / Display settings
 #define GFX_BL 1
 Arduino_DataBus *bus = new Arduino_ESP32QSPI(45 /* CS */, 47 /* SCK */, 21 /* D0 */, 48 /* D1 */, 40 /* D2 */, 39 /* D3 */);
 Arduino_GFX *g = new Arduino_AXS15231B(bus, GFX_NOT_DEFINED /* RST */, 0 /* rotation */, false /* IPS */, 320 /* width */, 480 /* height */);
 #define CANVAS
 Arduino_Canvas *gfx = new Arduino_Canvas(320 /* width */, 480 /* height */, g, 0 /* output_x */, 0 /* output_y */, 0 /* rotation */);
 
+// More Display Stuff
+uint32_t bufSize;
+lv_disp_draw_buf_t draw_buf;
+lv_color_t *disp_draw_buf;
+lv_disp_drv_t disp_drv;
+
+// Touch Settings
 BBCapTouch bbct;
 #define TOUCH_SDA 4
 #define TOUCH_SCL 8
 #define TOUCH_INT 3
 #define TOUCH_RST -1
-
-uint32_t screenWidth;
-uint32_t screenHeight;
-uint32_t bufSize;
-lv_disp_draw_buf_t draw_buf;
-lv_color_t *disp_draw_buf;
-lv_disp_drv_t disp_drv;
 
 // bluetooth variables
 BLECont *bleCont;
@@ -31,8 +30,11 @@ QueueHandle_t msgQueue;
 bool isConnected;
 
 // lvgl items
+LV_FONT_DECLARE(symbols)
 static lv_obj_t *btnm;
 
+// Button Matrix
+//==================
 #define APP_SYMBOL_MOVEWINDOW  "\xEF\x82\xB2" //f0b2
 #define APP_SYMBOL_HEADPHONES  "\xEF\x80\xA5" //f025
 #define APP_SYMBOL_SPEAKERS    "\xEF\x8B\x8E" //f2ce
@@ -60,12 +62,10 @@ static const char * btnm_map[] = {
   APP_SYMBOL_SPOTIFY,
   APP_SYMBOL_SMILEY, ""
 };
+// Button Matrix
+//==================
 
-lv_timer_t *screen_onScreenOffTimer;
-bool screen_touchFromPowerOff = false;
-#define LCD_MIN_SLEEP_TIME 5
-int screenOFFValue = 1; //1 Minute
-
+// These have to be here because...reasons.
 void updateConnection(bool isOn);
 void beginBleController();
 void msgTask(void *pvParam);
@@ -73,6 +73,13 @@ void beginMsgTask();
 static void makeGrid();
 static void key_event_cb(lv_event_t * e);
 void screen_startScreenTimer();
+
+// Sleep / Wake Stuff... not working yet.
+//==================
+lv_timer_t *screen_onScreenOffTimer;
+bool screen_touchFromPowerOff = false;
+#define LCD_MIN_SLEEP_TIME 5
+int screenOFFValue = 1; //1 Minute
 
 void screen_wakeUp()
 {
@@ -111,6 +118,9 @@ void screen_startScreenTimer()
     lv_timer_resume(screen_onScreenOffTimer);
 }
 
+//==================
+// Sleep / Wake Stuff... not working yet.
+
 void my_disp_flush(lv_disp_drv_t *disp_drv, const lv_area_t *area, lv_color_t *color_p)
 {
   uint32_t w = (area->x2 - area->x1 + 1);
@@ -139,6 +149,7 @@ void my_touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 
   if (touched && ti.count > 0)
   {
+    //Sleep / Wake Stuff... not working yet.
     lv_timer_reset(screen_onScreenOffTimer);
     if (screen_touchFromPowerOff)
     {
@@ -162,10 +173,7 @@ void setup()
 {
   Serial.begin(115200);
 
-  if (!gfx->begin())
-  {
-    Serial.println("gfx->being() failed!");
-  }
+  gfx->begin();
   gfx->setRotation(1);
   gfx->fillScreen(BLACK);
 
@@ -177,10 +185,7 @@ void setup()
 
   lv_init();
 
-  screenWidth = gfx->width();
-  screenHeight = gfx->height();
-
-  bufSize = screenWidth * 40;
+  bufSize = gfx->width() * 40;
   disp_draw_buf = (lv_color_t *)heap_caps_malloc(bufSize * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (!disp_draw_buf)
   {
@@ -190,13 +195,15 @@ void setup()
   {
     lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, bufSize);
 
+    // Initialize the display
     lv_disp_drv_init(&disp_drv);
-    disp_drv.hor_res = screenWidth;
-    disp_drv.ver_res = screenHeight;
+    disp_drv.hor_res = gfx->width();
+    disp_drv.ver_res = gfx->height();
     disp_drv.flush_cb = my_disp_flush;
     disp_drv.draw_buf = &draw_buf;
     lv_disp_drv_register(&disp_drv);
 
+    // Initialize the (dummy) input device driver
     static lv_indev_drv_t indev_drv;
     lv_indev_drv_init(&indev_drv);
     indev_drv.type = LV_INDEV_TYPE_POINTER;
@@ -214,6 +221,7 @@ void setup()
   beginMsgTask();
   beginBleController();
 
+  //Sleep / Wake Stuff... not working yet.
   lv_timer_handler();
   screen_setupScreenTimer();
 }
